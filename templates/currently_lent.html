@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Currently Lent Books</h1>
+
+<div class="table-responsive">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Author</th>
+                <th>Borrower</th>
+                <th>Lent Date</th>
+                <th>Notes</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in lent_books %}
+            <tr>
+                <td>
+                    {{ item.book.title }}
+                    {% if item.book.copy_number and item.book.copy_number > 1 %}
+                        <span class="badge bg-secondary">Copy #{{ item.book.copy_number }}</span>
+                    {% endif %}
+                    {% if item.book.deleted %}
+                        <span class="badge bg-danger">Deleted</span>
+                    {% endif %}
+                </td>
+                <td>{{ item.book.author }}</td>
+                <td>{{ item.lending.borrower_name }}</td>
+                <td>{{ item.lending.lent_date.strftime('%Y-%m-%d') }}</td>
+                <td>{{ item.lending.notes }}</td>
+                <td class="text-nowrap">
+                    <div class="d-flex gap-2">
+                        <form method="POST" action="{{ url_for('mark_returned', lending_id=item.lending.id) }}" class="d-inline">
+                            <button type="submit" class="btn btn-sm {% if item.book.deleted %}btn-secondary{% else %}btn-success{% endif %}" 
+                                    {% if item.book.deleted %}disabled{% endif %}>
+                                <i class="bi bi-check-circle"></i> Return
+                            </button>
+                        </form>
+                        <a href="{{ url_for('lending_history', book_id=item.book.id) }}" class="btn btn-sm btn-info">
+                            <i class="bi bi-book"></i> History
+                        </a>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            {% if not lent_books %}
+            <tr>
+                <td colspan="6" class="text-center">No books are currently lent out.</td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<div class="mt-3">
+    <a href="{{ url_for('index') }}" class="btn btn-secondary">Back to Library</a>
+</div>
+{% endblock %} 

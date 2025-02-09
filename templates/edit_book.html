@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Edit Book</h1>
+<form method="POST">
+    <div class="mb-3">
+        <label for="title" class="form-label">Title</label>
+        <input type="text" class="form-control" id="title" name="title" value="{{ book.title }}" required>
+    </div>
+    <div class="mb-3">
+        <label for="author" class="form-label">Author</label>
+        <input type="text" class="form-control" id="author" name="author" value="{{ book.author }}" required>
+    </div>
+    <div class="mb-3">
+        <label for="isbn" class="form-label">ISBN</label>
+        <input type="text" class="form-control" id="isbn" name="isbn" value="{{ book.isbn }}">
+    </div>
+    <div class="mb-3">
+        <label for="publication_date" class="form-label">Publication Date</label>
+        <input type="text" class="form-control" id="publication_date" name="publication_date" value="{{ book.publication_date }}" required>
+    </div>
+    <div class="mb-3">
+        <label for="pages" class="form-label">Pages</label>
+        <input type="number" class="form-control" id="pages" name="pages" value="{{ book.pages }}" required>
+    </div>
+    <div class="mb-3">
+        <label for="chapters" class="form-label">Chapters (optional)</label>
+        <input type="number" class="form-control" id="chapters" name="chapters" value="{{ book.chapters }}">
+    </div>
+    <div class="mb-3">
+        <label for="categories" class="form-label">Categories (comma-separated)</label>
+        <input type="text" class="form-control" id="categories" name="categories" value="{{ book.categories if book.categories else '' }}">
+    </div>
+    <div class="mb-3">
+        <label for="tags" class="form-label">Tags (comma-separated)</label>
+        <input type="text" class="form-control" id="tags" name="tags" value="{{ ', '.join(book.tags) if book.tags else '' }}">
+        <div class="form-text">Example: fiction, favorite, to-read</div>
+    </div>
+    <button type="submit" class="btn btn-primary">Update Book</button>
+    <a href="{{ url_for('index') }}" class="btn btn-secondary">Cancel</a>
+</form>
+{% endblock %} 

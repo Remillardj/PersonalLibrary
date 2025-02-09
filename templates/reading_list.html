@@ -1,0 +1,361 @@
+{% extends "base.html" %}
+
+{% block styles %}
+<style>
+    .drag-handle {
+        cursor: move;
+        color: #666;
+        display: inline-block;
+        vertical-align: middle;
+        margin-right: 8px;
+    }
+    .drag-handle:hover {
+        color: #000;
+    }
+    .sortable-ghost {
+        background-color: #f8f9fa !important;
+        opacity: 0.5;
+    }
+    /* Remove any custom table styling */
+    .table-striped tbody tr:nth-of-type(odd) {
+        background-color: rgba(0, 0, 0, 0.05);
+    }
+    .order-number {
+        display: inline-block;
+        vertical-align: middle;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>My Reading List</h1>
+<p class="text-muted">
+    Total books in reading list: {{ total_books }}
+    {% if selected_year %}
+        (Showing {{ filtered_count }} books from {{ selected_year }})
+    {% endif %}
+</p>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="alert alert-info mb-0">
+        <i class="bi bi-info-circle"></i>
+        {% if not selected_year %}
+            Books are ordered from latest to oldest. 
+        {% endif %}
+        Drag and drop items using the <i class="bi bi-grip-vertical"></i> handle to reorder your reading list
+    </div>
+    
+    <div class="d-flex align-items-center gap-2">
+        <label for="year-filter" class="form-label mb-0">Year:</label>
+        <select class="form-select" id="year-filter" style="width: auto;">
+            <option value="">All Years</option>
+            {% for year in available_years %}
+                <option value="{{ year }}" {% if selected_year == year %}selected{% endif %}>{{ year }}</option>
+            {% endfor %}
+        </select>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addBookModal">
+            <i class="bi bi-plus-circle"></i> Add Book to List
+        </button>
+    </div>
+</div>
+
+<!-- Add Book Modal -->
+<div class="modal fade" id="addBookModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add Book to Reading List</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addBookForm" method="POST" action="{{ url_for('add_to_reading_list_with_date') }}">
+                    <div class="row mb-3">
+                        <div class="col-md-12 mb-3">
+                            <label for="book_select" class="form-label">Select Book</label>
+                            <select class="form-select" id="book_select" name="book_id" required>
+                                <option value="">Choose a book...</option>
+                                {% for book in available_books %}
+                                <option value="{{ book.id }}">{{ book.title }} by {{ book.author }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label class="form-label">Date Added</label>
+                            <div class="row g-2">
+                                <div class="col-sm-4">
+                                    <select class="form-select" id="year" name="year" required>
+                                        <option value="{{ current_year }}" selected>{{ current_year }}</option>
+                                        {% for year in range(current_year-1, current_year-100, -1) %}
+                                            <option value="{{ year }}">{{ year }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-sm-4">
+                                    <select class="form-select" id="month" name="month">
+                                        <option value="">Month (Jan)</option>
+                                        {% for i in range(12) %}
+                                            <option value="{{ i + 1 }}">{{ month_names[i] }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-sm-4">
+                                    <input type="number" class="form-control" id="day" name="day" 
+                                           min="1" max="31" placeholder="Day (1)">
+                                </div>
+                            </div>
+                            <div class="form-text text-muted">Month and day are optional. Defaults to January 1st.</div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Notes (optional)</label>
+                        <textarea class="form-control" id="notes" name="notes" rows="2"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Add to Reading List</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Date Modal -->
+<div class="modal fade" id="editDateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Added Date</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editDateForm" method="POST" action="{{ url_for('edit_reading_list_date') }}">
+                    <input type="hidden" id="edit_item_id" name="item_id">
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label class="form-label">Date Added</label>
+                            <div class="row g-2">
+                                <div class="col-sm-4">
+                                    <select class="form-select" id="edit_year" name="year" required>
+                                        <option value="{{ current_year }}" selected>{{ current_year }}</option>
+                                        {% for year in range(current_year-1, current_year-100, -1) %}
+                                            <option value="{{ year }}">{{ year }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-sm-4">
+                                    <select class="form-select" id="edit_month" name="month" required>
+                                        {% for i in range(12) %}
+                                            <option value="{{ i + 1 }}">{{ month_names[i] }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-sm-4">
+                                    <input type="number" class="form-control" id="edit_day" name="day" 
+                                           min="1" max="31" required>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Update Date</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Read Date Modal -->
+<div class="modal fade" id="editReadDateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Read Date</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex flex-column gap-3">
+                    <form id="editReadDateForm" method="POST" action="{{ url_for('edit_reading_list_read_date') }}">
+                        <input type="hidden" id="edit_read_item_id" name="item_id">
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <label class="form-label">Date Read</label>
+                                <div class="row g-2">
+                                    <div class="col-sm-3">
+                                        <select class="form-select" id="edit_read_year" name="year" required>
+                                            <option value="{{ current_year }}" selected>{{ current_year }}</option>
+                                            {% for year in range(current_year-1, current_year-100, -1) %}
+                                                <option value="{{ year }}">{{ year }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-sm-4">
+                                        <select class="form-select" id="edit_read_month" name="month" required>
+                                            {% for i in range(12) %}
+                                                <option value="{{ i + 1 }}">{{ month_names[i] }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-sm-2">
+                                        <input type="number" class="form-control" id="edit_read_day" name="day" 
+                                               min="1" max="31" required>
+                                    </div>
+                                    <div class="col-sm-3">
+                                        <button type="submit" class="btn btn-primary w-100">Update</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                    
+                    <form id="unmarkForm" method="POST" action="{{ url_for('unmark_reading_list_item', item_id=0) }}" class="mt-3">
+                        <button type="submit" class="btn btn-warning w-100">
+                            <i class="bi bi-x-circle"></i> Not Read
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th style="width: 50px;"></th>
+                <th>Title</th>
+                <th>Author</th>
+                <th>Added Date</th>
+                <th>Status</th>
+                <th>Notes</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="sortable-list">
+            {% if reading_list %}
+                {% for item in reading_list %}
+                <tr data-id="{{ item.item.id }}">
+                    <td class="text-center">
+                        <div class="d-flex align-items-center justify-content-center">
+                            <i class="bi bi-grip-vertical drag-handle"></i>
+                            <span>{{ item.display_order }}</span>
+                        </div>
+                    </td>
+                    <td>{{ item.book.title }}</td>
+                    <td>{{ item.book.author }}</td>
+                    <td>{{ item.item.added_date.strftime('%Y-%m-%d') }}</td>
+                    <td>
+                        {% if item.item.completed %}
+                            <span class="badge bg-success">Read on {{ item.item.completed_date.strftime('%Y-%m-%d') }}</span>
+                        {% else %}
+                            <span class="badge bg-warning">To Read</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ item.item.notes }}</td>
+                    <td class="text-nowrap">
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-sm btn-info edit-date-btn" 
+                                    data-id="{{ item.item.id }}" 
+                                    data-date="{{ item.item.added_date.strftime('%Y-%m-%d') }}"
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#editDateModal">
+                                <i class="bi bi-calendar"></i> Edit Added
+                            </button>
+                            {% if item.item.completed %}
+                                <button type="button" class="btn btn-sm btn-info edit-read-date-btn"
+                                        data-id="{{ item.item.id }}"
+                                        data-date="{{ item.item.completed_date.strftime('%Y-%m-%d') }}"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#editReadDateModal">
+                                    <i class="bi bi-calendar-check"></i> Edit Read&nbsp;
+                                </button>
+                            {% else %}
+                                <form method="POST" action="{{ url_for('complete_reading_list_item', item_id=item.item.id) }}" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-success">
+                                        <i class="bi bi-check-circle"></i> Mark Read
+                                    </button>
+                                </form>
+                            {% endif %}
+                            <form method="POST" action="{{ url_for('remove_from_reading_list', item_id=item.item.id) }}" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-danger">
+                                    <i class="bi bi-trash"></i> Remove
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="7" class="text-center">No books in reading list.</td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const sortable = new Sortable(document.getElementById('sortable-list'), {
+        handle: '.drag-handle',
+        animation: 150,
+        onEnd: function(evt) {
+            const items = Array.from(evt.to.children).map((tr, index) => ({
+                id: tr.dataset.id,
+                order: index + 1
+            }));
+            
+            // Update the displayed order numbers
+            items.forEach(item => {
+                const row = document.querySelector(`tr[data-id="${item.id}"]`);
+                const orderSpan = row.querySelector('span');
+                orderSpan.textContent = item.order;
+            });
+            
+            fetch('{{ url_for("reorder_reading_list") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ items: items })
+            });
+        }
+    });
+
+    // Handle edit date button clicks
+    document.querySelectorAll('.edit-date-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const itemId = this.dataset.id;
+            const date = new Date(this.dataset.date);
+            
+            document.getElementById('edit_item_id').value = itemId;
+            document.getElementById('edit_year').value = date.getFullYear();
+            document.getElementById('edit_month').value = date.getMonth() + 1;
+            document.getElementById('edit_day').value = date.getDate();
+        });
+    });
+
+    // Handle edit read date button clicks
+    document.querySelectorAll('.edit-read-date-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const itemId = this.dataset.id;
+            const date = new Date(this.dataset.date);
+            
+            // Set up form values
+            document.getElementById('edit_read_item_id').value = itemId;
+            document.getElementById('edit_read_year').value = date.getFullYear();
+            document.getElementById('edit_read_month').value = date.getMonth() + 1;
+            document.getElementById('edit_read_day').value = date.getDate();
+            
+            // Set up unmark form action
+            const unmarkForm = document.getElementById('unmarkForm');
+            unmarkForm.action = unmarkForm.action.replace('/0', `/${itemId}`);
+        });
+    });
+});
+
+document.getElementById('year-filter').addEventListener('change', function() {
+    const year = this.value;
+    window.location.href = `{{ url_for('reading_list') }}?year=${year}`;
+});
+</script>
+{% endblock %} 

@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Library Metrics</h1>
+
+<div class="row g-4">
+    <!-- Book Statistics -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Book Statistics</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Total Books
+                        <span class="badge bg-primary rounded-pill">{{ total_books }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Total Pages
+                        <span class="badge bg-primary rounded-pill">{{ total_pages }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Total Chapters
+                        <span class="badge bg-primary rounded-pill">{{ total_chapters }}</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lending Statistics -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Lending Statistics</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Total Lendings
+                        <span class="badge bg-primary rounded-pill">{{ total_lendings }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Currently Lent
+                        <span class="badge bg-warning rounded-pill">{{ currently_lent }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Returned Books
+                        <span class="badge bg-success rounded-pill">{{ total_returned }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Overdue Books
+                        <span class="badge bg-danger rounded-pill">{{ overdue }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Unique Borrowers
+                        <span class="badge bg-info rounded-pill">{{ unique_borrowers }}</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reading List Statistics -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Reading List Statistics</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Total Books in Reading List
+                        <span class="badge bg-primary rounded-pill">{{ reading_list_total }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Books Read
+                        <span class="badge bg-success rounded-pill">{{ reading_list_completed }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Completion Rate
+                        <span class="badge bg-info rounded-pill">
+                            {{ "%.1f"|format(reading_list_completed / reading_list_total * 100 if reading_list_total > 0 else 0) }}%
+                        </span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Statistics -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Books by Category</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    {% for category, count in category_counts.items() %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        {{ category }}
+                        <span class="badge bg-primary rounded-pill">{{ count }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Monthly Lending Trends -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Monthly Lending Trends (Last 12 Months)</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Month</th>
+                                <th>Number of Lendings</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for month, count in monthly_lendings %}
+                            <tr>
+                                <td>{{ month.strftime('%B %Y') }}</td>
+                                <td>{{ count }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Request Statistics -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Request Statistics</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Total Requests
+                        <span class="badge bg-primary rounded-pill">{{ total_requests }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        GET Requests
+                        <span class="badge bg-info rounded-pill">{{ get_requests }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        POST Requests
+                        <span class="badge bg-warning rounded-pill">{{ post_requests }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Successful Requests
+                        <span class="badge bg-success rounded-pill">{{ success_requests }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Error Requests
+                        <span class="badge bg-danger rounded-pill">{{ error_requests }}</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Advanced Statistics -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Advanced Statistics</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Average Pages per Book
+                        <span class="badge bg-primary rounded-pill">{{ "%.1f"|format(avg_pages) }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Longest Book
+                        <span class="badge bg-info">{{ longest_book.title }} ({{ longest_book.pages }} pages)</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Books Added This Year
+                        <span class="badge bg-success rounded-pill">{{ books_this_year }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Average Reading Time
+                        <span class="badge bg-warning">{{ "%.1f"|format(avg_completion_time) }} days</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Average Lending Duration
+                        <span class="badge bg-info">{{ "%.1f"|format(avg_lending_duration) }} days</span>
+                    </li>
+                    {% if most_borrowed_book %}
+                    <li class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>Most Borrowed Book</div>
+                            <div class="text-end" style="max-width: 60%;">
+                                <span class="badge bg-primary text-wrap">
+                                    {{ most_borrowed_book.Book.title }} 
+                                    <span class="badge bg-light text-dark">{{ most_borrowed_book.borrow_count }}x</span>
+                                </span>
+                            </div>
+                        </div>
+                    </li>
+                    {% endif %}
+                    {% if most_frequent_borrower %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Most Frequent Borrower
+                        <span class="badge bg-success">{{ most_frequent_borrower.borrower_name }} ({{ most_frequent_borrower.borrow_count }}x)</span>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

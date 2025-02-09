@@ -1,0 +1,444 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Admin Panel</h1>
+
+<div class="row">
+    <!-- Left Column -->
+    <div class="col-md-8">
+        <!-- System Statistics -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">System Statistics</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <div class="border rounded p-3 text-center h-100">
+                            <h6 class="text-muted mb-3">Database Size</h6>
+                            <p class="h4 mb-0">{{ humanize.naturalsize(db_size) }}</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="border rounded p-3 text-center h-100">
+                            <h6 class="text-muted mb-3">Last Backup</h6>
+                            <p class="h4 mb-0">{{ last_backup_date.strftime('%Y-%m-%d %H:%M') if last_backup_date else 'Never' }}</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="border rounded p-3 text-center h-100">
+                            <h6 class="text-muted mb-3">Next Scheduled Backup</h6>
+                            <p class="h4 mb-0">{{ next_backup_time.strftime('%Y-%m-%d %H:%M') if next_backup_time else 'Not Scheduled' }}</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="border rounded p-3 text-center h-100">
+                            <h6 class="text-muted mb-3">Total Backups</h6>
+                            <p class="h4 mb-0">{{ total_backups|default(0) }} ({{ humanize.naturalsize(backups_size|default(0)) }})</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Database Backups -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Database Backups</h5>
+                <button class="btn btn-sm btn-danger" onclick="cleanupOldBackups()">Cleanup Old</button>
+            </div>
+            <div class="card-body">
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6 class="mb-0">Create Backup</h6>
+                    </div>
+                    <div class="card-body">
+                        <form method="POST" action="{{ url_for('create_backup') }}">
+                            <div class="mb-3">
+                                <label for="notes" class="form-label">Backup Notes</label>
+                                <input type="text" class="form-control" id="notes" name="notes">
+                            </div>
+                            <button type="submit" class="btn btn-primary">Create Backup</button>
+                        </form>
+                    </div>
+                </div>
+                
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h6 class="mb-0">Backup Schedule</h6>
+                    </div>
+                    <div class="card-body">
+                        {% if current_schedule %}
+                            <div class="alert alert-info">
+                                <h6>Current Schedule:</h6>
+                                {% if current_schedule.type == 'daily' %}
+                                    Daily at {{ "%02d:%02d"|format(current_schedule.hour, current_schedule.minute) }}
+                                {% else %}
+                                    Weekly on 
+                                    {% set days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] %}
+                                    {{ days[current_schedule.day] }} at 
+                                    {{ "%02d:%02d"|format(current_schedule.hour, current_schedule.minute) }}
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                        
+                        <div class="d-flex gap-2 mb-3">
+                            <button type="button" class="btn btn-primary" data-bs-toggle="collapse" data-bs-target="#scheduleForm">
+                                Set Schedule
+                            </button>
+                            <form method="POST" action="{{ url_for('remove_schedule') }}">
+                                <button type="submit" class="btn btn-danger">Remove Schedule</button>
+                            </form>
+                        </div>
+
+                        <div class="collapse" id="scheduleForm">
+                            <form method="POST" action="{{ url_for('schedule_backup') }}">
+                                <div class="mb-3">
+                                    <label class="form-label">Schedule Type</label>
+                                    <select class="form-select" name="schedule_type" id="schedule_type">
+                                        <option value="daily">Daily</option>
+                                        <option value="weekly">Weekly</option>
+                                    </select>
+                                </div>
+                                
+                                <div id="weekly_options" style="display: none;">
+                                    <div class="mb-3">
+                                        <label class="form-label">Day of Week</label>
+                                        <select class="form-select" name="day">
+                                            <option value="0">Monday</option>
+                                            <option value="1">Tuesday</option>
+                                            <option value="2">Wednesday</option>
+                                            <option value="3">Thursday</option>
+                                            <option value="4">Friday</option>
+                                            <option value="5">Saturday</option>
+                                            <option value="6">Sunday</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label class="form-label">Hour (24h)</label>
+                                            <input type="number" class="form-control" name="hour" min="0" max="23" value="0">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label class="form-label">Minute</label>
+                                            <input type="number" class="form-control" name="minute" min="0" max="59" value="0">
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <button type="submit" class="btn btn-primary">Save Schedule</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Size</th>
+                                <th>Type</th>
+                                <th>Notes</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for backup in backups %}
+                            <tr>
+                                <td>{{ backup.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                <td>{{ humanize.naturalsize(backup.size) }}</td>
+                                <td>
+                                    <span class="badge bg-{{ 'info' if backup.scheduled else 'primary' }}">
+                                        {{ 'Scheduled' if backup.scheduled else 'Manual' }}
+                                    </span>
+                                </td>
+                                <td>{{ backup.notes }}</td>
+                                <td>
+                                    <div class="btn-group">
+                                        <a href="{{ url_for('download_backup', backup_id=backup.id) }}" class="btn btn-sm btn-success">
+                                            <i class="bi bi-download"></i>
+                                        </a>
+                                        <button class="btn btn-sm btn-warning" onclick="restoreBackup({{ backup.id }})">
+                                            <i class="bi bi-arrow-counterclockwise"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-danger" onclick="deleteBackup({{ backup.id }})">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Trash Bin -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Trash Bin</h5>
+            </div>
+            <div class="card-body">
+                <!-- Deleted Books -->
+                <h6 class="mb-3">Deleted Books</h6>
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Author</th>
+                                <th>Deleted At</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for book in deleted_books %}
+                            <tr>
+                                <td>
+                                    {{ book.title }}
+                                    {% if book.copy_number and book.copy_number > 1 %}
+                                        <span class="badge bg-secondary">Copy #{{ book.copy_number }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ book.author }}</td>
+                                <td>{{ book.deleted_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td>
+                                    <form method="POST" action="{{ url_for('restore_book', book_id=book.id) }}" class="d-inline">
+                                        <button type="submit" class="btn btn-sm btn-success">
+                                            <i class="bi bi-arrow-counterclockwise"></i> Restore
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Deleted Lending Records -->
+                <h6 class="mb-3 mt-4">Deleted Lending Records</h6>
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Book</th>
+                                <th>Borrower</th>
+                                <th>Deleted At</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for lending in deleted_lendings %}
+                            <tr>
+                                <td>
+                                    {{ lending.book.title }}
+                                    {% if lending.book.copy_number and lending.book.copy_number > 1 %}
+                                        <span class="badge bg-secondary">Copy #{{ lending.book.copy_number }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ lending.borrower_name }}</td>
+                                <td>{{ lending.deleted_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td>
+                                    <form method="POST" action="{{ url_for('restore_lending', lending_id=lending.id) }}" class="d-inline">
+                                        <button type="submit" class="btn btn-sm btn-success">
+                                            <i class="bi bi-arrow-counterclockwise"></i> Restore
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column -->
+    <div class="col-md-4">
+        <!-- Request Logs -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Request Logs</h5>
+                <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#requestLogsModal">
+                    <i class="bi bi-arrows-fullscreen"></i> Full View
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="btn-group">
+                        <a href="{{ url_for('admin_panel', page=1) }}" 
+                           class="btn btn-sm btn-outline-secondary {{ 'active' if not status_filter }}">
+                            All
+                        </a>
+                        <a href="{{ url_for('admin_panel', page=1, status='2xx') }}" 
+                           class="btn btn-sm btn-outline-success {{ 'active' if status_filter == '2xx' }}">
+                            2xx
+                        </a>
+                        <a href="{{ url_for('admin_panel', page=1, status='3xx') }}" 
+                           class="btn btn-sm btn-outline-info {{ 'active' if status_filter == '3xx' }}">
+                            3xx
+                        </a>
+                        <a href="{{ url_for('admin_panel', page=1, status='4xx') }}" 
+                           class="btn btn-sm btn-outline-warning {{ 'active' if status_filter == '4xx' }}">
+                            4xx
+                        </a>
+                        <a href="{{ url_for('admin_panel', page=1, status='5xx') }}" 
+                           class="btn btn-sm btn-outline-danger {{ 'active' if status_filter == '5xx' }}">
+                            5xx
+                        </a>
+                    </div>
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Method</th>
+                                <th>Endpoint</th>
+                                <th>Status</th>
+                                <th>Response Time</th>
+                                <th>User Agent</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in logs.items %}
+                            <tr class="{{ 'table-danger' if log.status_code >= 400 else '' }}">
+                                <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                <td>{{ log.method }}</td>
+                                <td>{{ log.endpoint }}</td>
+                                <td>{{ log.status_code }}</td>
+                                <td>{{ "%.0f"|format(log.response_time * 1000) }}ms</td>
+                                <td class="text-truncate" style="max-width: 200px;" title="{{ log.user_agent }}">
+                                    {{ log.user_agent }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                {% if logs.pages > 1 %}
+                <nav>
+                    <ul class="pagination pagination-sm flex-wrap">
+                        <li class="page-item {% if logs.page == 1 %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('admin_panel', page=logs.page-1) }}">&laquo;</a>
+                        </li>
+                        
+                        <li class="page-item {% if logs.page == 1 %}active{% endif %}">
+                            <a class="page-link" href="{{ url_for('admin_panel', page=1) }}">1</a>
+                        </li>
+                        
+                        {% if logs.page - 1 > 2 %}
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                        {% endif %}
+                        
+                        {% for p in range([2, logs.page - 1]|max, [logs.pages, logs.page + 2]|min + 1) %}
+                            <li class="page-item {% if p == logs.page %}active{% endif %}">
+                                <a class="page-link" href="{{ url_for('admin_panel', page=p) }}">{{ p }}</a>
+                            </li>
+                        {% endfor %}
+                        
+                        {% if logs.page + 2 < logs.pages %}
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                        {% endif %}
+                        
+                        {% if logs.page + 2 < logs.pages %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('admin_panel', page=logs.pages) }}">{{ logs.pages }}</a>
+                            </li>
+                        {% endif %}
+                        
+                        <li class="page-item {% if logs.page == logs.pages %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('admin_panel', page=logs.page+1) }}">&raquo;</a>
+                        </li>
+                    </ul>
+                </nav>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Request Logs Modal -->
+<div class="modal fade" id="requestLogsModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Request Logs</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Method</th>
+                                <th>Path</th>
+                                <th>Status</th>
+                                <th>IP</th>
+                                <th style="min-width: 300px;">User Agent</th>
+                                <th>Response Time</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in logs.items %}
+                            <tr>
+                                <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                <td>{{ log.method }}</td>
+                                <td>{{ log.path }}</td>
+                                <td><span class="badge bg-{{ 'success' if log.status_code < 400 else 'warning' if log.status_code < 500 else 'danger' }}">{{ log.status_code }}</span></td>
+                                <td>{{ log.ip_address }}</td>
+                                <td class="text-break">{{ log.user_agent }}</td>
+                                <td>{{ "%.0f"|format(log.response_time * 1000) }}ms</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+function restoreBackup(backupId) {
+    if (confirm('Are you sure? This will overwrite the current database.')) {
+        fetch(`/admin/backup/${backupId}/restore`, { method: 'POST' })
+            .then(response => window.location.reload());
+    }
+}
+
+function deleteBackup(backupId) {
+    if (confirm('Are you sure you want to delete this backup?')) {
+        fetch(`/admin/backup/${backupId}/delete`, { method: 'POST' })
+            .then(response => window.location.reload());
+    }
+}
+
+function cleanupOldBackups() {
+    if (confirm('This will delete backups older than 30 days. Continue?')) {
+        fetch('/admin/backup/cleanup', { method: 'POST' })
+            .then(response => window.location.reload());
+    }
+}
+
+document.getElementById('schedule_type').addEventListener('change', function() {
+    const weeklyOptions = document.getElementById('weekly_options');
+    weeklyOptions.style.display = this.value === 'weekly' ? 'block' : 'none';
+});
+</script>
+{% endblock %} 
