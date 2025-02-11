@@ -4,13 +4,23 @@ A Flask-based web application for managing your personal book collection, tracki
 
 ## Features
 
-- Add books via ISBN lookup
+### Book Management
+- Add books via ISBN lookup or search by title/author using Google or OpenLibrary APIs
+- Edit book details and fill in missing information from Google/OpenLibrary using ISBN
 - Track multiple copies of the same book
-- Manage book lending and returns
-- Maintain a reading list
+- Mark books as read or unread
+
+### Lending Features
+- Manage book lending and returns 
 - View lending history and metrics
+- Maintain a reading list
+
+### Search & Organization
+- Search and filter books by various criteria, including no categories, read status, title, author, ISBN or acquisition date range
+
+### Administration
 - Admin panel with backup/restore functionality
-- Search and filter books by various criteria
+- Soft delete support for books and lending history with ability to restore or permanently delete
 
 ## Prerequisites
 
