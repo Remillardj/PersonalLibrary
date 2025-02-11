@@ -22,6 +22,8 @@ class Book(db.Model):
     reading_list_items = db.relationship('ReadingListItem', backref='book', lazy=True)
     deleted = db.Column(db.Boolean, default=False)
     deleted_at = db.Column(db.DateTime, nullable=True)
+    read = db.Column(db.Boolean, default=False)
+    read_date = db.Column(db.Date, nullable=True)
 
 class BookLending(db.Model):
     __tablename__ = 'book_lending'

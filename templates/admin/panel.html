@@ -215,6 +215,11 @@
                                             <i class="bi bi-arrow-counterclockwise"></i> Restore
                                         </button>
                                     </form>
+                                    <form method="POST" action="{{ url_for('permanent_delete_book', book_id=book.id) }}" class="d-inline" onsubmit="return confirm('Are you sure you want to permanently delete this book? This action cannot be undone.');">
+                                        <button type="submit" class="btn btn-sm btn-danger">
+                                            <i class="bi bi-trash"></i> Delete Permanently
+                                        </button>
+                                    </form>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -249,6 +254,11 @@
                                     <form method="POST" action="{{ url_for('restore_lending', lending_id=lending.id) }}" class="d-inline">
                                         <button type="submit" class="btn btn-sm btn-success">
                                             <i class="bi bi-arrow-counterclockwise"></i> Restore
+                                        </button>
+                                    </form>
+                                    <form method="POST" action="{{ url_for('permanent_delete_lending', lending_id=lending.id) }}" class="d-inline" onsubmit="return confirm('Are you sure you want to permanently delete this lending record? This action cannot be undone.');">
+                                        <button type="submit" class="btn btn-sm btn-danger">
+                                            <i class="bi bi-trash"></i> Delete Permanently
                                         </button>
                                     </form>
                                 </td>

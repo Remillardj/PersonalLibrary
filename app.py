@@ -3,7 +3,7 @@ from main import LibraryManager, BookDTO, format_isbn
 from models import db, Book, BookLending, ReadingListItem, RequestLog, DatabaseBackup
 from datetime import datetime, timedelta, date
 from sqlalchemy import text
-from sqlalchemy.sql import extract, distinct, desc, func
+from sqlalchemy.sql import extract, distinct, desc, func, or_
 from flask_migrate import Migrate
 import click
 import logging
@@ -108,53 +108,73 @@ def init_db():
 
 @app.route('/')
 def index():
-    search_query = request.args.get('search', '').strip()
-    category = request.args.get('category', '').strip()
     page = request.args.get('page', 1, type=int)
-    per_page = 10
+    search = request.args.get('search', '').strip()
+    search_by = request.args.get('search_by', 'title')
+    
+    # Get all unique categories for the dropdown
+    all_categories = library.get_all_categories()
     
     query = Book.query.filter_by(deleted=False)
     
-    if search_query:
-        query = query.filter(
-            db.or_(
-                Book.title.ilike(f'%{search_query}%'),
-                Book.author.ilike(f'%{search_query}%'),
-                Book.isbn.ilike(f'%{search_query}%')
+    if search:
+        if search_by == 'read':
+            if search == 'read':
+                query = query.filter(Book.read == True)
+            elif search == 'unread':
+                query = query.filter(Book.read == False)
+        elif search_by == 'title':
+            query = query.filter(Book.title.ilike(f'%{search}%'))
+        elif search_by == 'author':
+            query = query.filter(Book.author.ilike(f'%{search}%'))
+        elif search_by == 'categories':
+            if not search:  # Empty search = show all
+                pass
+            elif search.lower() == 'none':
+                query = query.filter(or_(Book.categories == None, Book.categories == ''))
+            else:
+                query = query.filter(Book.categories.ilike(f'%{search}%'))
+        elif search_by == 'isbn':
+            query = query.filter(Book.isbn.ilike(f'%{search}%'))
+        elif search_by == 'tags':
+            query = query.filter(Book.tags.ilike(f'%{search}%'))
+        elif search_by == 'all':
+            # Search across all relevant fields
+            query = query.filter(
+                db.or_(
+                    Book.title.ilike(f'%{search}%'),
+                    Book.author.ilike(f'%{search}%'),
+                    Book.isbn.ilike(f'%{search}%'),
+                    Book.categories.ilike(f'%{search}%'),
+                    Book.tags.ilike(f'%{search}%')
+                )
             )
-        )
     
-    if category:
-        query = query.filter(Book.categories.contains([category]))
+    # Date filtering
+    date_from = request.args.get('date_from')
+    date_to = request.args.get('date_to')
+    if date_from:
+        query = query.filter(Book.acquisition_date >= date_from)
+    if date_to:
+        query = query.filter(Book.acquisition_date <= date_to)
     
-    pagination = query.order_by(Book.title).paginate(page=page, per_page=per_page, error_out=False)
-    books = []
-    for book in pagination.items:
-        books.append({
-            'id': book.id,
-            'title': book.title,
-            'author': book.author,
-            'isbn': book.isbn,
-            'publication_date': book.publication_date,
-            'pages': book.pages,
-            'chapters': book.chapters,
-            'acquisition_date': book.acquisition_date,
-            'categories': book.categories,
-            'tags': book.tags,
-            'copy_number': book.copy_number,
-            'deleted': book.deleted
-        })
-    categories = library.get_all_categories()
+    total_books = query.count()
+    total_pages = (total_books + 10 - 1) // 10 if total_books > 0 else 0
     
-    return render_template('index.html', 
-                         books=books, 
-                         categories=categories,
-                         search_query=search_query,
-                         selected_category=category,
+    pagination = query.order_by(Book.title).paginate(page=page, per_page=10, error_out=False)
+    
+    return render_template('index.html',
+                         books=pagination.items,
                          pagination=pagination,
-                         total_pages=pagination.pages,
                          current_page=page,
-                         total_books=pagination.total)
+                         total_books=total_books,
+                         total_pages=total_pages,
+                         all_categories=all_categories,
+                         search_term=search,
+                         search_by=search_by,
+                         date_from=date_from,
+                         date_to=date_to,
+                         min=min)
 
 def get_next_copy_number(isbn):
     if not isbn:
@@ -175,11 +195,36 @@ def add_book():
         isbn = request.form.get('isbn')
         chapters = request.form.get('chapters', type=int)
         tags = request.form.get('tags', '')
+        categories = request.form.get('categories', '')
         
+        # Check if this is a manual entry by looking for required manual fields
+        if request.form.get('title') and request.form.get('author'):
+            try:
+                book = Book(
+                    title=request.form['title'],
+                    author=request.form['author'],
+                    isbn=isbn,
+                    publication_date=request.form['publication_date'],
+                    pages=int(request.form.get('pages', 0)),  # Default to 0 if empty
+                    chapters=chapters,
+                    acquisition_date=datetime.now().date(),
+                    categories=categories,
+                    tags=tags
+                )
+                db.session.add(book)
+                db.session.commit()
+                flash('Book added successfully!', 'success')
+                return redirect(url_for('add_book'))
+            except Exception as e:
+                db.session.rollback()
+                flash(f'Error adding book: {str(e)}', 'error')
+                return redirect(url_for('add_book'))
+        
+        # ISBN-based addition
         try:
             book_data = library.get_book_data_by_isbn(isbn)
             if not book_data:
-                flash('Could not find book data for this ISBN', 'error')
+                flash('Could not find book data for this ISBN', 'warning')
                 return redirect(url_for('add_book'))
             
             copy_number = get_next_copy_number(isbn)
@@ -204,9 +249,8 @@ def add_book():
             
             db.session.add(book)
             db.session.commit()
-            
             flash('Book added successfully!', 'success')
-            return redirect(url_for('index'))
+            return redirect(url_for('add_book'))
             
         except Exception as e:
             db.session.rollback()
@@ -219,11 +263,26 @@ def add_book():
 def lookup_isbn(isbn):
     try:
         book_data = library.get_book_data_by_isbn(isbn)
-        if book_data:
-            return jsonify(book_data)
-        return jsonify({'error': 'Book not found'}), 404
+        if not book_data:
+            flash('Could not find book data for this ISBN', 'warning')
+            return jsonify({'error': 'Could not find book data for this ISBN'})
+        
+        # Ensure categories is a string
+        categories = book_data.get('categories', '')
+        if isinstance(categories, list):
+            categories = ', '.join(categories)
+            
+        return jsonify({
+            'title': book_data.get('title'),
+            'author': book_data.get('author'),
+            'isbn': isbn,
+            'publication_date': book_data.get('publication_date'),
+            'pages': book_data.get('pages'),
+            'categories': categories
+        })
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        flash(f'Error looking up ISBN: {str(e)}', 'error')
+        return jsonify({'error': str(e)})
 
 @app.route('/book/<int:book_id>/delete')
 def delete_book(book_id):
@@ -243,39 +302,32 @@ def delete_book(book_id):
 
 @app.route('/edit_book/<int:book_id>', methods=['GET', 'POST'])
 def edit_book(book_id):
-    book = library.get_book(book_id)
+    book = Book.query.get_or_404(book_id)
     if request.method == 'POST':
-        categories = [cat.strip() for cat in request.form.get('categories', '').split(',') if cat.strip()]
-        tags = [tag.strip() for tag in request.form.get('tags', '').split(',') if tag.strip()]
-        
-        # Update SQLAlchemy Book
-        sqlalchemy_book = Book.query.get(book_id)
-        if sqlalchemy_book:
-            sqlalchemy_book.title = request.form['title']
-            sqlalchemy_book.author = request.form['author']
-            sqlalchemy_book.isbn = request.form['isbn']
-            sqlalchemy_book.publication_date = request.form['publication_date']
-            sqlalchemy_book.pages = int(request.form['pages'])
-            sqlalchemy_book.chapters = int(request.form['chapters']) if request.form.get('chapters') else None
-            sqlalchemy_book.acquisition_date = datetime.strptime(request.form['acquisition_date'], '%Y-%m-%d').date() if request.form['acquisition_date'] else None
-            sqlalchemy_book.categories = ','.join(categories)
-            sqlalchemy_book.tags = ','.join(tags)
+        try:
+            # Handle empty strings for optional fields
+            categories = request.form.get('categories', '').strip()
+            tags = request.form.get('tags', '').strip()
+            chapters = request.form.get('chapters')
+            chapters = int(chapters) if chapters else None
+            
+            book.title = request.form['title'].strip()
+            book.author = request.form['author'].strip()
+            book.isbn = request.form['isbn'].strip() if request.form.get('isbn') else None
+            book.publication_date = request.form['publication_date'].strip()
+            book.pages = int(request.form['pages'])
+            book.chapters = chapters
+            book.categories = categories
+            book.tags = tags
+            
             db.session.commit()
-        
-        # Update LibraryManager Book
-        book.title = request.form['title']
-        book.author = request.form['author']
-        book.isbn = request.form['isbn']
-        book.publication_date = request.form['publication_date']
-        book.pages = int(request.form['pages'])
-        book.chapters = int(request.form['chapters']) if request.form.get('chapters') else None
-        book.acquisition_date = datetime.strptime(request.form['acquisition_date'], '%Y-%m-%d').date() if request.form['acquisition_date'] else None
-        book.categories = categories
-        book.tags = ','.join(tags)
-        library.update_book(book)
-        
-        flash('Book updated successfully!', 'success')
-        return redirect(url_for('index'))
+            flash('Book updated successfully!', 'success')
+            return redirect(url_for('index'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error updating book: {str(e)}', 'error')
+            return redirect(url_for('edit_book', book_id=book_id))
+    
     return render_template('edit_book.html', book=book)
 
 @app.route('/search_title', methods=['POST'])
@@ -836,6 +888,8 @@ def metrics():
         func.count(BookLending.id).label('borrow_count')
     ).group_by(BookLending.borrower_name).order_by(text('borrow_count DESC')).first()
 
+    total_read = Book.query.filter_by(deleted=False, read=True).count()
+
     return render_template('metrics.html',
                          total_books=total_books,
                          total_pages=total_pages,
@@ -861,7 +915,8 @@ def metrics():
                          avg_completion_time=avg_completion_time,
                          avg_lending_duration=avg_lending_duration,
                          most_borrowed_book=most_borrowed_book,
-                         most_frequent_borrower=most_frequent_borrower)
+                         most_frequent_borrower=most_frequent_borrower,
+                         total_read=total_read)
 
 @app.route('/admin')
 def admin_panel():
@@ -1153,6 +1208,75 @@ def fix_copy_numbers():
     
     db.session.commit()
     flash('Copy numbers have been updated!', 'success')
+    return redirect(url_for('admin_panel'))
+
+@app.route('/mark_book_read/<int:book_id>', methods=['POST'])
+def mark_book_read(book_id):
+    try:
+        book = Book.query.get_or_404(book_id)
+        # Toggle read status
+        book.read = not book.read
+        book.read_date = datetime.now().date() if not book.read else None
+        db.session.commit()
+        flash(f'Book {"marked as read" if book.read else "marked as unread"}!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash('Error updating book read status', 'error')
+    return redirect(request.referrer or url_for('index'))
+
+@app.route('/search_books')
+def search_books():
+    query = request.args.get('q', '')
+    if not query:
+        return jsonify([])
+    
+    results = library.search_books(query)
+    return jsonify(results)
+
+@app.route('/search_combined', methods=['POST'])
+def search_combined():
+    data = request.get_json()
+    title = data.get('title', '').strip()
+    author = data.get('author', '').strip()
+    
+    if not title and not author:
+        return jsonify([])
+    
+    books = library.search_combined(title, author)
+    if not books:
+        flash('No books found matching your search criteria', 'warning')
+    return jsonify(books)
+
+@app.route('/book/<int:book_id>/permanent_delete', methods=['POST'])
+def permanent_delete_book(book_id):
+    try:
+        book = Book.query.get_or_404(book_id)
+        if not book.deleted:
+            flash('Only deleted books can be permanently removed', 'error')
+            return redirect(url_for('admin_panel'))
+            
+        db.session.delete(book)
+        db.session.commit()
+        flash('Book permanently deleted', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error permanently deleting book: {str(e)}', 'error')
+    return redirect(url_for('admin_panel'))
+
+@app.route('/lending/<int:lending_id>/permanent_delete', methods=['POST'])
+def permanent_delete_lending(lending_id):
+    try:
+        lending = BookLending.query.get_or_404(lending_id)
+        if not lending.deleted:
+            flash('Only deleted lending records can be permanently removed', 'error')
+            return redirect(url_for('admin_panel'))
+            
+        db.session.delete(lending)
+        db.session.commit()
+        flash('Lending record permanently deleted', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error permanently deleting lending record: {str(e)}', 'error')
     return redirect(url_for('admin_panel'))
 
 if __name__ == '__main__':

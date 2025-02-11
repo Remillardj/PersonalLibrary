@@ -9,10 +9,14 @@
             <div class="col-md-3">
                 <label for="search_input" class="form-label">Search</label>
                 <input type="text" class="form-control" name="search" id="search_input" placeholder="Search..." value="{{ request.args.get('search', '') }}">
-                <select class="form-select d-none" name="category" id="category_select">
-                    <option value="">Select Category</option>
-                    {% for category in categories %}
-                    <option value="{{ category }}" {% if request.args.get('search') == category %}selected{% endif %}>{{ category }}</option>
+                <select class="form-select d-none" id="category_select" name="">
+                    <option value="">All Categories</option>
+                    <option value="none">No Categories</option>
+                    <option disabled>──────────</option>
+                    {% for category in all_categories %}
+                        <option value="{{ category }}" {% if request.args.get('search') == category %}selected{% endif %}>
+                            {{ category }}
+                        </option>
                     {% endfor %}
                 </select>
             </div>
@@ -25,6 +29,7 @@
                     <option value="isbn" {% if request.args.get('search_by') == 'isbn' %}selected{% endif %}>ISBN</option>
                     <option value="categories" {% if request.args.get('search_by') == 'categories' %}selected{% endif %}>Categories</option>
                     <option value="tags" {% if request.args.get('search_by') == 'tags' %}selected{% endif %}>Tags</option>
+                    <option value="read" {% if request.args.get('search_by') == 'read' %}selected{% endif %}>Read Status</option>
                 </select>
             </div>
             <div class="col-md-2">
@@ -88,21 +93,42 @@
                     {% endif %}
                 </td>
                 <td class="text-nowrap">
-                    <div class="d-flex gap-2">
-                        <a href="{{ url_for('edit_book', book_id=book.id) }}" class="btn btn-sm btn-primary rounded">
-                            <i class="bi bi-pencil"></i> Edit
-                        </a>
-                        <a href="{{ url_for('lending_history', book_id=book.id) }}" class="btn btn-sm btn-info rounded">
-                            <i class="bi bi-book"></i> Lending
-                        </a>
-                        <a href="{{ url_for('delete_book', book_id=book.id) }}" class="btn btn-sm btn-danger rounded" onclick="return confirm('Are you sure?')">
-                            <i class="bi bi-trash"></i> Delete
-                        </a>
-                        <form method="POST" action="{{ url_for('add_to_reading_list', book_id=book.id) }}" class="d-inline">
-                            <button type="submit" class="btn btn-sm btn-secondary">
-                                <i class="bi bi-bookmark-plus"></i> Add to Reading List
-                            </button>
-                        </form>
+                    <div class="d-flex flex-column gap-2">
+                        <!-- Row 1: Edit and Delete -->
+                        <div class="d-flex gap-2">
+                            <a href="{{ url_for('edit_book', book_id=book.id) }}" class="btn btn-sm btn-primary rounded w-50">
+                                <i class="bi bi-pencil"></i> Edit
+                            </a>
+                            <a href="{{ url_for('delete_book', book_id=book.id) }}" class="btn btn-sm btn-danger rounded w-50" onclick="return confirm('Are you sure?')">
+                                <i class="bi bi-trash"></i> Delete
+                            </a>
+                        </div>
+                        
+                        <!-- Row 2: Lending -->
+                        <div class="d-flex">
+                            <a href="{{ url_for('lending_history', book_id=book.id) }}" class="btn btn-sm btn-info rounded w-100">
+                                <i class="bi bi-book"></i> Lending
+                            </a>
+                        </div>
+                        
+                        <!-- Row 3: Reading List and Mark Read -->
+                        <div class="d-flex gap-2">
+                            <form method="POST" action="{{ url_for('add_to_reading_list', book_id=book.id) }}" class="w-50">
+                                <button type="submit" class="btn btn-sm btn-secondary w-100">
+                                    <i class="bi bi-bookmark-plus"></i> To List
+                                </button>
+                            </form>
+                            <form method="POST" action="{{ url_for('mark_book_read', book_id=book.id) }}" class="w-100">
+                                <button type="submit" class="btn btn-sm {% if book.read %}btn-outline-success{% else %}btn-success{% endif %} w-100">
+                                    <i class="bi {% if book.read %}bi-check-circle-fill{% else %}bi-check-circle{% endif %}"></i>
+                                    {% if book.read %}
+                                        Unmark Read
+                                    {% else %}
+                                        Mark Read
+                                    {% endif %}
+                                </button>
+                            </form>
+                        </div>
                     </div>
                 </td>
             </tr>
@@ -111,7 +137,7 @@
     </table>
 </div>
 
-{% if total_pages > 1 %}
+{% if total_pages and total_pages > 1 %}
 <nav aria-label="Page navigation">
     <ul class="pagination justify-content-center">
         <li class="page-item {% if current_page == 1 %}disabled{% endif %}">
@@ -146,18 +172,30 @@ document.addEventListener('DOMContentLoaded', function() {
     const searchBy = document.getElementById('search_by');
     const searchInput = document.getElementById('search_input');
     const categorySelect = document.getElementById('category_select');
+    const readSelect = document.getElementById('read_select');
     
     function toggleSearchField() {
         if (searchBy.value === 'categories') {
             searchInput.classList.add('d-none');
             categorySelect.classList.remove('d-none');
+            readSelect.classList.add('d-none');
             categorySelect.name = 'search';
             searchInput.name = '';
+            readSelect.name = '';
+        } else if (searchBy.value === 'read') {
+            searchInput.classList.add('d-none');
+            categorySelect.classList.add('d-none');
+            readSelect.classList.remove('d-none');
+            readSelect.name = 'search';
+            searchInput.name = '';
+            categorySelect.name = '';
         } else {
             searchInput.classList.remove('d-none');
             categorySelect.classList.add('d-none');
+            readSelect.classList.add('d-none');
             searchInput.name = 'search';
             categorySelect.name = '';
+            readSelect.name = '';
         }
     }
     
@@ -165,4 +203,9 @@ document.addEventListener('DOMContentLoaded', function() {
     toggleSearchField(); // Initial state
 });
 </script>
+
+<select class="form-select d-none" id="read_select" name="">
+    <option value="read">Read</option>
+    <option value="unread">Unread</option>
+</select>
 {% endblock %} 

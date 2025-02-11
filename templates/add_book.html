@@ -25,7 +25,17 @@
     </div>
 
     <div class="col-md-6">
-        <h3>Manual Entry</h3>
+        <h3>Add Manually</h3>
+        <div class="mb-3">
+            <div class="input-group mb-2">
+                <input type="text" class="form-control" id="titleSearch" placeholder="Search by title" onkeypress="handleKeyPress(event)">
+            </div>
+            <div class="input-group mb-2">
+                <input type="text" class="form-control" id="authorSearch" placeholder="Search by author" onkeypress="handleKeyPress(event)">
+            </div>
+            <button class="btn btn-outline-secondary w-100" type="button" id="searchButton">Search</button>
+        </div>
+        
         <form method="POST">
             <div class="mb-3">
                 <label for="title" class="form-label">Title</label>
@@ -51,29 +61,38 @@
                 <label for="manual-chapters" class="form-label">Chapters (optional)</label>
                 <input type="number" class="form-control" id="manual-chapters" name="chapters">
             </div>
+            <div class="mb-3">
+                <label for="manual-categories" class="form-label">Categories (comma-separated, optional)</label>
+                <input type="text" class="form-control" id="manual-categories" name="categories">
+            </div>
+            <div class="mb-3">
+                <label for="manual-tags" class="form-label">Tags (comma-separated, optional)</label>
+                <input type="text" class="form-control" id="manual-tags" name="tags">
+                <div class="form-text">Example: fiction, favorite, to-read</div>
+            </div>
             <div class="d-flex gap-2">
                 <button type="submit" class="btn btn-primary">Add Book Manually</button>
-                <button type="button" class="btn btn-secondary" id="searchTitle">Search</button>
                 <button type="button" class="btn btn-outline-secondary" id="clearFields">Clear</button>
             </div>
         </form>
     </div>
 </div>
 
-<div class="modal fade" id="editionsModal" tabindex="-1" aria-hidden="true">
+<!-- Search Results Modal -->
+<div class="modal fade" id="searchResultsModal" tabindex="-1" aria-labelledby="searchResultsModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Select Edition</h5>
+                <h5 class="modal-title" id="searchResultsModalLabel">Search Results</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <div class="list-group" id="editionsList">
+                    <!-- Search results will be populated here -->
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="saveEdition" data-bs-dismiss="modal">Save Selection</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
     </div>
@@ -110,20 +129,31 @@ async function handleSearch(searchParams) {
                 button.innerHTML = `
                     <div class="d-flex w-100 justify-content-between">
                         <h5 class="mb-1">${book.title}</h5>
-                        <small>${book.publishedDate || 'Unknown date'}</small>
+                        <small class="text-muted">${book.source}</small>
                     </div>
-                    <p class="mb-1">by ${book.authors ? book.authors.join(', ') : 'Unknown author'}</p>
-                    <small>ISBN: ${book.isbn || 'N/A'} | Pages: ${book.pageCount || 'Unknown'}</small>
-                    ${book.description ? `<p class="mt-2 small text-muted">${book.description}</p>` : ''}
+                    <p class="mb-1">Author: ${book.author}</p>
+                    <small>
+                        ${book.publication_date ? `Published: ${book.publication_date}` : ''}
+                        ${book.pages ? ` | Pages: ${book.pages}` : ''}
+                        ${book.categories ? `<br>Categories: ${book.categories}` : ''}
+                    </small>
                 `;
                 
-                button.addEventListener('click', () => {
-                    editionsList.querySelectorAll('button').forEach(btn => {
-                        btn.classList.remove('active');
-                    });
-                    button.classList.add('active');
+                button.addEventListener('click', function() {
                     selectedBook = book;
                     saveButton.disabled = false;
+                    document.querySelectorAll('.list-group-item').forEach(item => {
+                        item.classList.remove('active');
+                    });
+                    button.classList.add('active');
+                    
+                    // Auto-fill the form fields
+                    document.getElementById('title').value = book.title || '';
+                    document.getElementById('author').value = book.author || '';
+                    document.getElementById('manual-isbn').value = book.isbn || '';
+                    document.getElementById('publication_date').value = book.publication_date || '';
+                    document.getElementById('pages').value = book.pages || '0';
+                    document.getElementById('manual-categories').value = book.categories || '';
                 });
                 
                 editionsList.appendChild(button);
@@ -132,10 +162,10 @@ async function handleSearch(searchParams) {
             saveButton.onclick = () => {
                 if (selectedBook) {
                     document.getElementById('title').value = selectedBook.title;
-                    document.getElementById('author').value = selectedBook.authors ? selectedBook.authors.join(', ') : '';
+                    document.getElementById('author').value = selectedBook.author || '';
                     document.getElementById('manual-isbn').value = selectedBook.isbn || '';
-                    document.getElementById('publication_date').value = selectedBook.publishedDate || '';
-                    document.getElementById('pages').value = selectedBook.pageCount || '';
+                    document.getElementById('publication_date').value = selectedBook.publication_date || '';
+                    document.getElementById('pages').value = selectedBook.pages || '';
                 }
             };
             
@@ -156,25 +186,90 @@ function clearFormFields() {
     document.getElementById('publication_date').value = '';
     document.getElementById('pages').value = '';
     document.getElementById('manual-chapters').value = '';
+    document.getElementById('manual-categories').value = '';
+    document.getElementById('manual-tags').value = '';
 }
 
 // Event listeners
 document.getElementById('clearFields').addEventListener('click', clearFormFields);
 
-document.getElementById('searchTitle').addEventListener('click', function() {
-    const searchParams = {};
-    const title = document.getElementById('title').value;
-    const author = document.getElementById('author').value;
-    const date = document.getElementById('publication_date').value;
+document.getElementById('searchButton').addEventListener('click', async function() {
+    const title = document.getElementById('titleSearch').value;
+    const author = document.getElementById('authorSearch').value;
     
-    if (title) searchParams.title = title;
-    if (author) searchParams.author = author;
-    if (date) searchParams.publication_date = date;
-    
-    if (Object.keys(searchParams).length > 0) {
-        handleSearch(searchParams);
+    if (!title && !author) {
+        alert('Please enter either a title or author');
+        return;
+    }
+
+    try {
+        const response = await fetch('/search_combined', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                title: title,
+                author: author
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Search failed');
+        }
+        const books = await response.json();
+        displaySearchResults(books);
+        // Show the modal
+        const searchModal = new bootstrap.Modal(document.getElementById('searchResultsModal'));
+        searchModal.show();
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error searching for books');
     }
 });
+
+function displaySearchResults(books) {
+    const editionsList = document.getElementById('editionsList');
+    editionsList.innerHTML = '';
+    
+    if (books.length === 0) {
+        editionsList.innerHTML = '<div class="list-group-item">No results found</div>';
+        return;
+    }
+    
+    books.forEach(book => {
+        const li = document.createElement('button');
+        li.className = 'list-group-item list-group-item-action';
+        li.innerHTML = `
+            <div class="d-flex w-100 justify-content-between">
+                <h5 class="mb-1">${book.title || 'Unknown Title'}</h5>
+                <small class="text-muted">${book.source}</small>
+            </div>
+            <p class="mb-1">Author: ${book.author || 'Unknown Author'}</p>
+            <small>
+                ${book.publication_date ? `Published: ${book.publication_date}` : ''}
+                ${book.pages ? ` | Pages: ${book.pages}` : ''}
+                ${book.isbn ? ` | ISBN: ${book.isbn}` : ''}
+                ${book.categories ? `<br>Categories: ${book.categories}` : ''}
+            </small>
+        `;
+        
+        li.addEventListener('click', () => {
+            // Fill the form with the selected book's data
+            document.getElementById('title').value = book.title || '';
+            document.getElementById('author').value = book.author || '';
+            document.getElementById('manual-isbn').value = book.isbn || '';
+            document.getElementById('publication_date').value = book.publication_date || '';
+            document.getElementById('pages').value = book.pages || '0';
+            document.getElementById('manual-categories').value = book.categories || '';
+            
+            // Close the modal
+            bootstrap.Modal.getInstance(document.getElementById('searchResultsModal')).hide();
+        });
+        
+        editionsList.appendChild(li);
+    });
+}
 
 // Modal cleanup
 document.getElementById('editionsModal').addEventListener('hidden.bs.modal', function (event) {
@@ -186,5 +281,12 @@ document.getElementById('editionsModal').addEventListener('hidden.bs.modal', fun
     document.body.style.overflow = '';
     document.body.style.paddingRight = '';
 });
+
+function handleKeyPress(event) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        document.getElementById('searchButton').click();
+    }
+}
 </script>
 {% endblock %} 

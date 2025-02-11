@@ -2,6 +2,15 @@
 
 {% block content %}
 <h1>Edit Book</h1>
+<div class="mb-3">
+    <div class="input-group">
+        <input type="text" class="form-control" id="lookup_isbn" placeholder="Enter ISBN to update fields">
+        <button type="button" class="btn btn-secondary" id="lookupButton">
+            <i class="bi bi-search"></i> Lookup ISBN
+        </button>
+    </div>
+</div>
+
 <form method="POST">
     <div class="mb-3">
         <label for="title" class="form-label">Title</label>
@@ -39,4 +48,53 @@
     <button type="submit" class="btn btn-primary">Update Book</button>
     <a href="{{ url_for('index') }}" class="btn btn-secondary">Cancel</a>
 </form>
+
+<script>
+document.getElementById('lookupButton').addEventListener('click', function() {
+    const isbn = document.getElementById('lookup_isbn').value;
+    if (!isbn) return;
+
+    fetch(`/lookup_isbn/${isbn}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+            
+            // Helper function to update field only if it's empty or new data exists
+            function updateField(fieldId, newValue) {
+                const field = document.getElementById(fieldId);
+                if (!field.value.trim() && newValue) {
+                    field.value = newValue;
+                }
+            }
+            
+            // Update each field only if it's empty and new data exists
+            updateField('title', data.title);
+            updateField('author', data.author);
+            updateField('isbn', data.isbn);
+            updateField('publication_date', data.publication_date);
+            updateField('pages', data.pages);
+            
+            // For categories, append new ones if they don't exist
+            const currentCategories = new Set(
+                document.getElementById('categories').value
+                    .split(',')
+                    .map(cat => cat.trim())
+                    .filter(cat => cat)
+            );
+            
+            if (data.categories) {
+                const newCategories = data.categories.split(',').map(cat => cat.trim());
+                newCategories.forEach(cat => currentCategories.add(cat));
+                document.getElementById('categories').value = Array.from(currentCategories).join(', ');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error looking up ISBN');
+        });
+});
+</script>
 {% endblock %} 
